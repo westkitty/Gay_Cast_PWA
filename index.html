@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#17070a">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="GayCast PWA — private local-first media search launcher, library, and player.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
+  <title>GayCast</title>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">G//C</span><span><strong>GayCast</strong><small>PWA</small></span></div>
+      <div class="status-row"><span id="networkBadge" class="pill">Online</span><button id="installBtn" class="ghost" hidden>Install</button></div>
+    </header>
+    <main id="main">
+      <section class="hero">
+        <p class="eyebrow">PRIVATE · LOCAL-FIRST · HONEST RESULTS</p>
+        <h1>Search the places. Keep your own library.</h1>
+        <p class="lede">This browser edition never manufactures scraped results. Search launches the real provider query. Your search history and saved items stay in this browser; local media never leaves your device.</p>
+        <form id="searchForm" class="searchbox" role="search">
+          <label class="sr-only" for="query">Search media providers</label>
+          <input id="query" name="q" type="search" autocomplete="off" placeholder="Search: muscle, vintage, bear, locker room…" required>
+          <button class="primary" type="submit">Search providers</button>
+        </form>
+        <div id="quickTerms" class="chips" aria-label="Quick searches"></div>
+      </section>
+
+      <nav class="tabs" aria-label="Primary">
+        <button data-tab="search" class="tab active" aria-selected="true">Search</button>
+        <button data-tab="library" class="tab">Library <span id="libraryCount">0</span></button>
+        <button data-tab="player" class="tab">Player</button>
+        <button data-tab="about" class="tab">About</button>
+      </nav>
+
+      <section id="searchPanel" class="panel active" data-panel="search">
+        <div class="section-head"><div><p class="eyebrow">PROVIDER LAUNCHER</p><h2 id="resultsTitle">Ready when you are.</h2></div><button id="clearHistory" class="ghost">Clear history</button></div>
+        <div id="searchState" class="notice">Enter one search. GayCast will prepare provider-specific searches without fabricating cross-site results.</div>
+        <div id="providerGrid" class="provider-grid"></div>
+        <div class="section-head compact"><div><p class="eyebrow">RECENT</p><h2>Search history</h2></div></div>
+        <div id="historyList" class="stack empty-state">No searches yet.</div>
+      </section>
+
+      <section id="libraryPanel" class="panel" data-panel="library" hidden>
+        <div class="section-head"><div><p class="eyebrow">YOUR DEVICE</p><h2>Local library</h2></div><button id="addUrlBtn" class="ghost">Add URL</button></div>
+        <div class="library-actions">
+          <label class="file-pick"><input id="filePicker" type="file" accept="video/*,audio/*" multiple><span>Choose local media</span></label>
+          <p>Local file selections are session-only. Saved URLs and favorites persist in this browser.</p>
+        </div>
+        <div id="libraryList" class="stack empty-state">Your library is empty.</div>
+      </section>
+
+      <section id="playerPanel" class="panel" data-panel="player" hidden>
+        <div class="section-head"><div><p class="eyebrow">BROWSER PLAYER</p><h2 id="nowPlaying">Nothing loaded</h2></div></div>
+        <div class="player-frame"><video id="player" controls playsinline preload="metadata"></video></div>
+        <div class="url-row"><input id="directUrl" type="url" placeholder="Direct media URL (https://…)"><button id="playUrlBtn" class="primary">Play URL</button></div>
+        <p class="muted">Ordinary web pages are not direct media. If the browser cannot play a URL, GayCast reports that failure rather than pretending playback started.</p>
+      </section>
+
+      <section id="aboutPanel" class="panel" data-panel="about" hidden>
+        <div class="about-grid">
+          <article><p class="eyebrow">WHAT WORKS HERE</p><h2>Browser-native GayCast</h2><p>Installable PWA shell, offline launch, provider-specific search handoffs, local search history, saved URLs, favorites, local-file playback, and direct-media playback.</p></article>
+          <article><p class="eyebrow">WHAT STAYS ANDROID-ONLY</p><h2>No fake parity.</h2><p>Cross-origin HTML scraping, Android Media3, foreground downloads, native casting, watch-party sockets, Room storage, scoped-media permissions, and LAN discovery remain native capabilities.</p></article>
+        </div>
+        <div class="notice warning"><strong>Why provider search opens the provider:</strong> GitHub Pages serves static files. Browsers enforce cross-origin security rules, and many provider sites intentionally block third-party page scraping. GayCast does not route around that with an untrusted proxy.</div>
+      </section>
+    </main>
+    <footer><span>GayCast PWA</span><span id="versionText">v1 web</span></footer>
+  </div>
+  <dialog id="urlDialog">
+    <form method="dialog" id="urlForm">
+      <h2>Add media URL</h2><label>Title<input id="urlTitle" required maxlength="120"></label><label>Direct or page URL<input id="urlValue" type="url" required></label>
+      <div class="dialog-actions"><button value="cancel" class="ghost">Cancel</button><button value="default" id="saveUrlBtn" class="primary">Save</button></div>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
