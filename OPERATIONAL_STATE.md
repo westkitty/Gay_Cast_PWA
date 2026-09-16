@@ -47,11 +47,12 @@
 - GayCast Edge is deployed at `https://gaycast-edge.atlas-of-one.workers.dev`; production endpoint injection is controlled by repository variable `GAYCAST_EDGE_BASE_URL`, not hard-coded into the client source.
 - The broker is allowlist-only, accepts no arbitrary target URL, limits each request to 6 providers, bounds query/page inputs, restricts browser CORS to `https://westkitty.github.io`, and uses native Cloudflare `SEARCH_RATE_LIMITER` at 120 searches/60 seconds.
 - PWA searches larger than 6 eligible providers are transparently split into bounded broker batches and canonical-deduplicated client-side. Direct verified provider searches remain visible as the recovery path.
-- GayPornPlanet adapter is LIVE VERIFIED on Cloudflare: `bear` = 40 results, `muscle` = 40 results, URL intersection = 0; nonsense control = `QUERY_FALLBACK`, 0 trusted results.
+- GayPornArchive, GayPornPlanet, and MachoTube adapters are LIVE VERIFIED on Cloudflare. Each returned 40 trusted results for `bear` and `muscle`; provider-specific nonsense controls return `QUERY_FALLBACK` with 0 trusted results.
 - XVideos parser is implemented but Cloudflare-vantage blocked by the provider's explicit tiny redirect message; `VANTAGE_BLOCKED` is cached as a known Edge state so searches do not re-fetch it.
 - BarebackBastards parser is implemented but Cloudflare upstream exceeds the 8-second broker budget; `VANTAGE_TIMEOUT` is cached as a known Edge state so it cannot stall aggregate searches.
 - Unsupported Edge parsers return `ADAPTER_UNIMPLEMENTED`; Android `SUPPORTED` never implies Edge success.
-- Edge unit/contract suite contains 13 passing tests, including rate-limit behavior, GayPornPlanet query-fallback/result-path regressions, and cached Cloudflare-vantage failure states.
+- Edge unit/contract suite contains 17 passing tests, including rate-limit behavior, GayPornPlanet redirect evidence, GayPornArchive/MachoTube query-evidence guards, and cached Cloudflare-vantage failure states.
 - Pages CI validates manifest/contract/runtime JSON, browser/service-worker syntax, Edge syntax, and Edge contract tests before deployment.
 
 - 2026-09-16 Edge latency closeout: default six-provider `bear` request returned 40 proven GayPornPlanet results in ~194 ms client-observed; BarebackBastards `VANTAGE_TIMEOUT` and other unimplemented states returned immediately rather than blocking the batch. Deployed Worker version `f317f1a9-f50f-45ea-a6b7-3cd1de36c574`.
+- 2026-09-16 three-source aggregate closeout: default six-provider `bear` request returned 120 proven results (40 each from GayPornArchive, GayPornPlanet, MachoTube) in ~223 ms client-observed. Deployed Worker version `74ce2c1b-f698-43d4-a890-f27a61596314`.

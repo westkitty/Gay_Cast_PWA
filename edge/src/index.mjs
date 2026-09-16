@@ -2,7 +2,7 @@ import contract from '../../provider-contract.json' with { type: 'json' };
 
 const PROVIDERS = new Map(contract.providers.map(p => [p.id, p]));
 const JSON_HEADERS = {'content-type':'application/json; charset=utf-8','cache-control':'no-store'};
-const ADAPTERS = new Map([['gaypornplanet',{version:'gaypornplanet-edge-v1',parseText:parseGayPornPlanetHtml}]]);
+const ADAPTERS = new Map([['gaypornarchive',{version:'gaypornarchive-edge-v1',parseText:parseGayPornArchiveHtml}],['gaypornplanet',{version:'gaypornplanet-edge-v1',parseText:parseGayPornPlanetHtml}],['machotube',{version:'machotube-edge-v1',parseText:parseMachoTubeHtml}]]);
 const KNOWN_EDGE_STATES = new Map([['barebackbastards','VANTAGE_TIMEOUT'],['xvideos','VANTAGE_BLOCKED']]);
 
 function cors(origin, env={}) {
@@ -55,6 +55,32 @@ function upstreamBlockState(html, provider) {
   if(html.length<50000 && /cf-chl|challenge-platform|<title>Just a moment|cf-turnstile|access denied/i.test(html)) return 'VANTAGE_BLOCKED';
   return null;
 }
+export function parseMachoTubeHtml(html, provider) {
+  const out=[], seen=new Set();
+  for(const match of html.matchAll(/<a\b([^>]*)>/gi)) {
+    const tag=match[1], href=tagAttr(tag,'href'), title=tagAttr(tag,'title').trim(), cls=tagAttr(tag,'class');
+    if(!title || !/(?:^|\s)js-gallery-link(?:\s|$)/.test(cls) || !/^\/movies\/\d+\/[a-z0-9][^?#]*$/i.test(href)) continue;
+    if(href.includes('${') || title.includes('${')) continue;
+    const url=new URL(href,'https://www.machotube.tv').href;
+    if(seen.has(url)) continue;
+    seen.add(url); out.push({title,url,providerId:provider.id,source:provider.name});
+    if(out.length>=40) break;
+  }
+  return out;
+}
+export function parseGayPornArchiveHtml(html, provider) {
+  const out=[], seen=new Set();
+  for(const match of html.matchAll(/<a\b([^>]*)>/gi)) {
+    const tag=match[1], href=tagAttr(tag,'href'), title=tagAttr(tag,'title').trim(), cls=tagAttr(tag,'class'), gallery=tagAttr(tag,'data-gallery-id');
+    if(!title || !/(?:^|\s)js-gallery-link(?:\s|$)/.test(cls) || !/^\d+$/.test(gallery) || !/^\/\d+\/[a-z0-9][^?#]*\/$/i.test(href)) continue;
+    if(href.includes('${') || title.includes('${')) continue;
+    const url=new URL(href,'https://gaypornarchive.com').href;
+    if(seen.has(url)) continue;
+    seen.add(url); out.push({title,url,providerId:provider.id,source:provider.name});
+    if(out.length>=40) break;
+  }
+  return out;
+}
 export function parseGayPornPlanetHtml(html, provider) {
   const out=[], seen=new Set();
   for(const match of html.matchAll(/<a\b([^>]*)>/gi)) {
@@ -97,7 +123,8 @@ async function searchProvider(provider, query, page) {
     const blocked=upstreamBlockState(html,provider);
     const diagnostics={htmlBytes:html.length,thumbBlockMarkers:(html.match(/thumb-block/gi)||[]).length,titleClassMarkers:(html.match(/class=["'][^"']*\btitle\b/gi)||[]).length,thumbnailMarkers:(html.match(/class=["'][^"']*\bthumbnail\b/gi)||[]).length};
     if(blocked) return {providerId:provider.id,provider:provider.name,state:blocked,adapterVersion:adapter.version,requestUrl,finalUrl:response.url,elapsedMs:Date.now()-started,diagnostics,results:[]};
-    const results=adapter.parseText(html,provider);
+    const results=adapter.parseText(html,provider,query);
+    if(['gaypornarchive','machotube'].includes(provider.id)&&results.length){const tokens=(query.toLowerCase().match(/[a-z0-9]{3,}/g)||[]);const evidenced=tokens.length&&results.some(x=>tokens.some(t=>x.title.toLowerCase().includes(t)));if(!evidenced)return {providerId:provider.id,provider:provider.name,state:'QUERY_FALLBACK',adapterVersion:adapter.version,requestUrl,finalUrl:response.url,elapsedMs:Date.now()-started,diagnostics:{resultCount:results.length,queryEvidence:false},results:[]};}
     return {providerId:provider.id,provider:provider.name,state:results.length?'OK':'EMPTY',adapterVersion:adapter.version,requestUrl,finalUrl:response.url,elapsedMs:Date.now()-started,diagnostics:results.length?undefined:diagnostics,results};
   } catch(error) {
     return {providerId:provider.id,provider:provider.name,state:(error?.name==='AbortError'||String(error?.message||'').toLowerCase()==='timeout')?'TIMEOUT':'NETWORK_ERROR',requestUrl,elapsedMs:Date.now()-started,diagnostics:{errorName:error?.name||'Error',errorMessage:String(error?.message||'fetch failed').slice(0,180)},results:[]};
