@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildProviderUrl,handleRequest,parseBarebackBastardsHtml,parseGayPornArchiveHtml,parseGayPornPlanetHtml,parseMachoTubeHtml,parseXVideosHtml} from '../src/index.mjs';
+import {buildProviderUrl,handleRequest,parseBarebackBastardsHtml,parseGayPornArchiveHtml,parseGayPornPlanetHtml,parseMachoTubeHtml,parseSunPornoHtml,parseXVideosHtml} from '../src/index.mjs';
 import contract from '../../provider-contract.json' with { type: 'json' };
 const xvideos=contract.providers.find(p=>p.id==='xvideos');
 test('zero-based pagination is preserved from contract',()=>{assert.equal(buildProviderUrl(xvideos,'locker room',1),'https://www.xvideos.com/?k=locker+room&p=0');assert.equal(buildProviderUrl(xvideos,'bear',3),'https://www.xvideos.com/?k=bear&p=2')});
@@ -27,3 +27,5 @@ test('GayPornArchive unrelated fallback titles are rejected',async()=>{const old
 
 test('MachoTube parser accepts only dedicated movie result links',()=>{const p=contract.providers.find(x=>x.id==='machotube');const html=`<a class="js-gallery-stats js-gallery-link" href="/movies/927560/sample-bear-clip" title="Sample Bear Clip">x</a><a class="js-gallery-link" href="{{ thumbLink }}" title="{{ title }}">x</a><a href="/search/bear?cats=2016" title="Filter">x</a>`;const out=parseMachoTubeHtml(html,p);assert.equal(out.length,1);assert.equal(out[0].url,'https://www.machotube.tv/movies/927560/sample-bear-clip')});
 test('MachoTube unrelated fallback titles are rejected',async()=>{const old=globalThis.fetch;globalThis.fetch=async()=>({ok:true,status:200,url:'https://www.machotube.tv/search/qzxqzxqzx987',headers:{get:()=> 'text/html'},text:async()=>'<a class="js-gallery-link" href="/movies/1234/default-listing" title="Default Listing">x</a>'});try{const r=await handleRequest(new Request('https://edge.test/v1/search?q=qzxqzxqzx987&providers=machotube'));const j=await r.json();assert.equal(j.reports[0].state,'QUERY_FALLBACK');assert.deepEqual(j.results,[])}finally{globalThis.fetch=old}});
+
+test('SunPorno parser accepts only dedicated result cards',()=>{const p=contract.providers.find(x=>x.id==='sunporno');const html=`<a class="item drclass" href="https://www.sunporno.com/v/32492/beautiful-blowjob-by-aislin-for-a-teddy-bear-grey-strapon/" title="Porn VideosBeautiful blowjob by Aislin for a teddy bear Grey, strapon">x</a><a href="https://www.sunporno.com/categories/" title="Categories">x</a>`;const out=parseSunPornoHtml(html,p);assert.deepEqual(out,[{title:'Beautiful blowjob by Aislin for a teddy bear Grey, strapon',url:'https://www.sunporno.com/v/32492/beautiful-blowjob-by-aislin-for-a-teddy-bear-grey-strapon/',providerId:'sunporno',source:'SunPorno'}])});

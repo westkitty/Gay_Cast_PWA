@@ -2,7 +2,7 @@ import contract from '../../provider-contract.json' with { type: 'json' };
 
 const PROVIDERS = new Map(contract.providers.map(p => [p.id, p]));
 const JSON_HEADERS = {'content-type':'application/json; charset=utf-8','cache-control':'no-store'};
-const ADAPTERS = new Map([['gaypornarchive',{version:'gaypornarchive-edge-v1',parseText:parseGayPornArchiveHtml}],['gaypornplanet',{version:'gaypornplanet-edge-v1',parseText:parseGayPornPlanetHtml}],['machotube',{version:'machotube-edge-v1',parseText:parseMachoTubeHtml}]]);
+const ADAPTERS = new Map([['gaypornarchive',{version:'gaypornarchive-edge-v1',parseText:parseGayPornArchiveHtml}],['gaypornplanet',{version:'gaypornplanet-edge-v1',parseText:parseGayPornPlanetHtml}],['machotube',{version:'machotube-edge-v1',parseText:parseMachoTubeHtml}],['sunporno',{version:'sunporno-edge-v1',parseText:parseSunPornoHtml}]]);
 const KNOWN_EDGE_STATES = new Map([['barebackbastards','VANTAGE_TIMEOUT'],['xvideos','VANTAGE_BLOCKED']]);
 
 function cors(origin, env={}) {
@@ -93,6 +93,21 @@ export function parseGayPornPlanetHtml(html, provider) {
   }
   return out;
 }
+export function parseSunPornoHtml(html, provider) {
+  const out=[], seen=new Set();
+  for(const match of html.matchAll(/<a\b([^>]*)>/gi)) {
+    const tag=match[1], href=tagAttr(tag,'href'), title=tagAttr(tag,'title').trim(), cls=tagAttr(tag,'class');
+    if(!title || !/(?:^|\s)item(?:\s|$)/.test(cls) || !/^https?:\/\/(?:www\.)?sunporno\.com\/v\/\d+\/[^?#]+\/?$/i.test(href)) continue;
+    const cleanTitle=title.replace(/^Porn Videos/i,'').trim();
+    if(!cleanTitle) continue;
+    const url=new URL(href,'https://www.sunporno.com').href;
+    if(seen.has(url)) continue;
+    seen.add(url); out.push({title:cleanTitle,url,providerId:provider.id,source:provider.name});
+    if(out.length>=40) break;
+  }
+  return out;
+}
+
 export function parseXVideosHtml(html, provider) {
   const out=[], seen=new Set();
   const pattern=/<p\b[^>]*class=["'][^"']*\btitle\b[^"']*["'][^>]*>\s*<a\b([^>]*)>/gi;
