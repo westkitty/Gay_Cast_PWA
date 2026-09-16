@@ -58,6 +58,7 @@ jobs:
           python3 -m json.tool provider-contract.json >/dev/null
           python3 -m json.tool runtime-config.json >/dev/null
           node --check app.js
+          grep -F "from './db.js'" app.js >/dev/null
           node --check db.js
           node --check sw.js
           node --check edge/src/index.mjs

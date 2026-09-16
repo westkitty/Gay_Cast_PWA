@@ -43,7 +43,7 @@
 ## Shared provider truth + GayCast Edge — 2026-09-16
 - `provider-contract.json` is a byte-for-byte mirror of Android-generated `contracts/provider-contract.json`; Android `SearchProviderSupportRegistry.kt` remains the authority.
 - PWA provider eligibility derives from the contract: 6 supported gay-specific providers by default and 6 supported general networks behind explicit local opt-in.
-- Service-worker cache `gaycast-pwa-v4` includes both provider and runtime configuration while remaining network-first for updates.
+- Service-worker cache `gaycast-pwa-v5` includes both provider and runtime configuration while remaining network-first for updates.
 - GayCast Edge is deployed at `https://gaycast-edge.atlas-of-one.workers.dev`; production endpoint injection is controlled by repository variable `GAYCAST_EDGE_BASE_URL`, not hard-coded into the client source.
 - The broker is allowlist-only, accepts no arbitrary target URL, limits each request to 6 providers, bounds query/page inputs, restricts browser CORS to `https://westkitty.github.io`, and uses native Cloudflare `SEARCH_RATE_LIMITER` at 120 searches/60 seconds.
 - PWA searches larger than 6 eligible providers are transparently split into bounded broker batches and canonical-deduplicated client-side. Direct verified provider searches remain visible as the recovery path.
