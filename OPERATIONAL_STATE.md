@@ -3,37 +3,39 @@
 ## Project identity
 - Canonical repository: `westkitty/Gay_Cast_PWA`.
 - Product: installable browser/PWA edition of GayCast.
-- Hosting: GitHub Pages at `https://westkitty.github.io/Gay_Cast_PWA/`.
-- Current baseline: `36092f22f41db9d1bd0ebd1e37e577be0af01e16`.
+- Hosting: `https://westkitty.github.io/Gay_Cast_PWA/` through GitHub Pages.
 - Android GayCast remains a separate private repository and is not exposed here.
 
-## Verified capabilities
-- GitHub Pages deployment workflow completed successfully.
-- Live Pages root returns HTTP 200 over HTTPS.
-- Live page exposes the GayCast title and current hero content.
-- Live manifest is valid JSON and declares standalone display plus 192px/512px PNG icons.
-- JavaScript and service-worker source pass `node --check`.
-- Static PWA validation and `git diff --check` passed before publication.
-- Public visible copy passed the deterministic public-copy lint gate.
+## Current parity baseline
+- Browser persistence uses versioned IndexedDB stores for media, collections, creators, saved searches, inbox, and settings.
+- Media records support favorite, watched, progress, duration, bookmarks, tags, notes, creator, collection, and timestamps.
+- Search supports verified provider handoffs, search history, quick terms, and saved searches without fabricated aggregate results.
+- Library supports local filtering/sorting, favorite and unwatched filters, URL records, ephemeral local-file playback, and local discovery recommendations.
+- Player supports honest success/failure state, progress persistence, bookmarks, watched state, PiP, fullscreen, Media Session, Web Share, Remote Playback where available, and CORS-permitted direct downloads.
+- Privacy/data surfaces support optional hashed PIN, background re-lock, JSON export/import, storage estimates, and persistent-storage requests.
+- Service worker caches the application shell for offline launch.
 
 ## Active invariants
-- Never fabricate provider search results.
-- Provider searches open the provider's real query URL when browser cross-origin rules prevent reliable aggregation.
-- Local history and saved URL state remain browser-local.
-- Local file selections are session-only and never uploaded by the PWA.
-- Ordinary page URLs must not be reported as successful direct-media playback.
-- Android-only capabilities must remain clearly identified rather than simulated in the PWA.
+- Never fabricate provider search results or playback success.
+- Cross-site provider HTML is not scraped from static GitHub Pages when browser origin policy blocks trustworthy access.
+- Library and curation data remain browser-local unless the user explicitly exports or shares them.
+- Selected local media files are session-only and are never uploaded by the PWA.
+- Browser-dependent capabilities must be labeled as such rather than treated as universal.
+- Android-only capabilities must remain explicit rather than simulated.
 
-## Known limits
-- Static GitHub Pages cannot reliably scrape third-party provider HTML across origins.
-- Android Media3, foreground downloads, native casting, LAN discovery, Room storage, scoped-media permissions, and watch-party sockets are not browser capabilities here.
-- Local-file persistence across sessions is intentionally not claimed; browser file selections are ephemeral.
-- Direct media playback depends on browser codec support, provider CORS policy, and whether the URL actually resolves to playable media.
+## Remaining hard platform boundaries
+- Full multi-provider result aggregation requires a trusted backend or provider APIs with suitable CORS; static Pages alone cannot supply it reliably.
+- Android foreground download/service behavior has no static-PWA equivalent.
+- Native LAN discovery, Fire TV-specific control, and socket-based watch parties require a signaling/native network layer not present on Pages.
+- Android Media3, scoped storage, camera/QR integration, and FLAG_SECURE do not have equivalent universal browser APIs.
+- Local-file persistence across restarts remains browser/permission dependent; ordinary file-picker selections are ephemeral.
 
-## Deployment contract
-- `.github/workflows/pages.yml` deploys the repository root with official GitHub Pages actions.
-- Pages uses HTTPS and workflow-based deployment.
-- Any future claim of browser feature parity must be backed by browser-path evidence, not Android evidence.
+## Verification state
+- JavaScript modules and service worker pass `node --check`.
+- Manifest parses as valid JSON and static source passes `git diff --check`.
+- Headless Chrome loaded the application over HTTP, executed module initialization, opened IndexedDB, rendered the storage estimate, and populated the runtime capability matrix without observed JavaScript exceptions.
+- Full interactive browser matrix (every control in multiple browser engines) remains narrower than Android physical-device evidence and must not be conflated with it.
 
 ## Revision log
-- 2026-09-16: Initial public PWA repository created and published. GitHub Pages enabled with workflow deployment. Live root and manifest verified over HTTPS. Initial browser feature set includes installability, offline shell, provider search handoffs, browser-local history/saved URLs/favorites, local-file session playback, and direct-media playback with honest failure reporting.
+- 2026-09-16: Initial Pages PWA published.
+- 2026-09-16: Major parity pass replaced localStorage-only prototype state with IndexedDB domain stores and added library curation, local discovery, saved searches, creators, inbox, progress/bookmarks/watched state, backup/restore, PIN/background lock, browser storage controls, PiP/fullscreen/Media Session/Web Share/Remote Playback hooks, and direct-download handling while preserving explicit browser/native boundaries.
