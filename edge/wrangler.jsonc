@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "gaycast-edge",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-09-16",
+  "vars": {
+    "ALLOWED_ORIGIN": "https://westkitty.github.io"
+  },
+  "ratelimits": [
+    {
+      "name": "SEARCH_RATE_LIMITER",
+      "namespace_id": "9162026",
+      "simple": {
+        "limit": 120,
+        "period": 60
+      }
+    }
+  ]
+}

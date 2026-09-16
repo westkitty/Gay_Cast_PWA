@@ -28,6 +28,25 @@ jobs:
         uses: actions/checkout@v4
       - name: Configure Pages
         uses: actions/configure-pages@v5
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Configure optional GayCast Edge endpoint
+        env:
+          GAYCAST_EDGE_BASE_URL: ${{ vars.GAYCAST_EDGE_BASE_URL }}
+        run: |
+          python3 - <<'PYCFG'
+          import json, os
+          from pathlib import Path
+          path = Path('runtime-config.json')
+          data = json.loads(path.read_text())
+          edge = os.environ.get('GAYCAST_EDGE_BASE_URL', '').strip().rstrip('/')
+          if edge and not edge.startswith('https://'):
+              raise SystemExit('GAYCAST_EDGE_BASE_URL must use https://')
+          data['edgeBase'] = edge
+          path.write_text(json.dumps(data, indent=2) + '\n')
+          PYCFG
       - name: Validate PWA files
         run: |
           test -f index.html
@@ -36,6 +55,13 @@ jobs:
           test -f icons/icon-192.png
           test -f icons/icon-512.png
           python3 -m json.tool manifest.webmanifest >/dev/null
+          python3 -m json.tool provider-contract.json >/dev/null
+          python3 -m json.tool runtime-config.json >/dev/null
+          node --check app.js
+          node --check db.js
+          node --check sw.js
+          node --check edge/src/index.mjs
+          node --test edge/test/*.test.mjs
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
