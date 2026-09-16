@@ -2,7 +2,8 @@ import contract from '../../provider-contract.json' with { type: 'json' };
 
 const PROVIDERS = new Map(contract.providers.map(p => [p.id, p]));
 const JSON_HEADERS = {'content-type':'application/json; charset=utf-8','cache-control':'no-store'};
-const ADAPTERS = new Map([['barebackbastards',{version:'barebackbastards-edge-v1',parseText:parseBarebackBastardsHtml}],['gaypornplanet',{version:'gaypornplanet-edge-v1',parseText:parseGayPornPlanetHtml}],['xvideos',{version:'xvideos-edge-v2',parseText:parseXVideosHtml}]]);
+const ADAPTERS = new Map([['gaypornplanet',{version:'gaypornplanet-edge-v1',parseText:parseGayPornPlanetHtml}]]);
+const KNOWN_EDGE_STATES = new Map([['barebackbastards','VANTAGE_TIMEOUT'],['xvideos','VANTAGE_BLOCKED']]);
 
 function cors(origin, env={}) {
   const allowed = env.ALLOWED_ORIGIN || 'https://westkitty.github.io';
@@ -80,6 +81,8 @@ export function parseXVideosHtml(html, provider) {
   return out;
 }
 async function searchProvider(provider, query, page) {
+  const knownState=KNOWN_EDGE_STATES.get(provider.id);
+  if(knownState) return {providerId:provider.id,provider:provider.name,state:knownState,results:[]};
   const adapter=ADAPTERS.get(provider.id);
   if(!adapter) return {providerId:provider.id,provider:provider.name,state:'ADAPTER_UNIMPLEMENTED',results:[]};
   const requestUrl=buildProviderUrl(provider,query,page);
@@ -104,14 +107,14 @@ export async function handleRequest(request, env={}) {
   const url=new URL(request.url), origin=request.headers.get('origin')||'';
   if(request.method==='OPTIONS') return new Response(null,{status:204,headers:{...cors(origin,env),'access-control-allow-methods':'GET,OPTIONS','access-control-allow-headers':'content-type'}});
   if(request.method!=='GET') return json({error:'method_not_allowed'},405,origin,env);
-  if(url.pathname==='/health') return json({ok:true,contractId:contract.contractId,schemaVersion:contract.schemaVersion,decidedProviders:contract.providers.length,edgeAdapters:[...ADAPTERS.keys()]},200,origin,env);
-  if(url.pathname==='/v1/providers') return json({contractId:contract.contractId,providers:contract.providers.filter(p=>p.supportState==='SUPPORTED').map(p=>({...p,edgeAdapter:ADAPTERS.has(p.id)}))},200,origin,env);
+  if(url.pathname==='/health') return json({ok:true,contractId:contract.contractId,schemaVersion:contract.schemaVersion,decidedProviders:contract.providers.length,edgeAdapters:[...ADAPTERS.keys()],knownEdgeStates:Object.fromEntries(KNOWN_EDGE_STATES)},200,origin,env);
+  if(url.pathname==='/v1/providers') return json({contractId:contract.contractId,providers:contract.providers.filter(p=>p.supportState==='SUPPORTED').map(p=>({...p,edgeAdapter:ADAPTERS.has(p.id),edgeState:ADAPTERS.has(p.id)?'READY':(KNOWN_EDGE_STATES.get(p.id)||'ADAPTER_UNIMPLEMENTED')}))},200,origin,env);
   if(url.pathname!=='/v1/search') return json({error:'not_found'},404,origin,env);
   const query=(url.searchParams.get('q')||'').trim();
   if(!query || query.length>120) return json({error:'invalid_query'},400,origin,env);
   if(env.SEARCH_RATE_LIMITER){const limited=await env.SEARCH_RATE_LIMITER.limit({key:'v1-search'});if(!limited.success)return json({error:'rate_limited'},429,origin,env)}
   const ids=requestedProviders(url);
-  if(!ids.length) return json({error:'providers_required','allowed':[...ADAPTERS.keys()]},400,origin,env);
+  if(!ids.length) return json({error:'providers_required','allowed':contract.providers.filter(p=>p.supportState==='SUPPORTED').map(p=>p.id)},400,origin,env);
   if(ids.length>6) return json({error:'too_many_providers',max:6},400,origin,env);
   const providers=[];
   for(const id of ids){const p=PROVIDERS.get(id);if(!p || p.supportState!=='SUPPORTED')return json({error:'provider_not_allowed',providerId:id},400,origin,env);providers.push(p)}
