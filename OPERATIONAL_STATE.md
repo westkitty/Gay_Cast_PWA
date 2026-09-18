@@ -96,3 +96,31 @@
 - Local Wrangler OAuth deployment remains historically verified, but this reliability source phase does not require or imply a new production Worker deployment.
 
 - Browser smoke note (2026-09-18): headless Chrome was available, but both isolated DevTools and sequential `--dump-dom` harnesses wedged in the temporary Chrome profile before completing the v2→v3/offline user-path assertions. Only the v2 seed step was observed. Treat browser migration/offline smoke as BLOCKED/UNVERIFIED for this source phase; no browser-pass claim is authorized from that attempt.
+
+
+## State revision 2026-09-18.2 — reliability closure
+
+### Production Edge proof
+- Deployed the normalized GayCast Edge implementation from commit `1c40abfb32ae4cc45b02863f71480b4208d1adc8` using the authorized local Wrangler OAuth session.
+- Live Cloudflare Worker version: `0a467f49-96f5-4fcf-aded-cf478b78bbab`.
+- Live `/health` now reports `providerContractSchemaVersion: 1` and the four adapter objects with explicit v2 versions:
+  - GayPornArchive — `gaypornarchive-edge-v2`
+  - GayPornPlanet — `gaypornplanet-edge-v2`
+  - MachoTube — `machotube-edge-v2`
+  - SunPorno — `sunporno-edge-v2`
+- Live four-provider `bear` search returned 132 trusted results: 40 GayPornArchive, 40 GayPornPlanet, 40 MachoTube, 12 SunPorno. All four reports were `OK`, `trusted: true`, and carried adapter ID/version metadata.
+
+### Real browser migration + offline proof
+- A fresh isolated Playwright/Chrome context against the deployed GitHub Pages origin seeded a realistic IndexedDB v2 database with a legacy media record, then loaded the current PWA.
+- Migration proof: database opened at v3, legacy media title `Legacy survives` remained present, and the new `providerObservations` + `searchSnapshots` stores existed alongside all six pre-existing user stores.
+- Service worker controlled the deployed page.
+- Default gay-provider `bear` search rendered 120 trusted cards with provider evidence `VANTAGE_TIMEOUT: 1 · ADAPTER_UNIMPLEMENTED: 2 · OK: 3` and zero page errors.
+- IndexedDB contained one exact-query snapshot with 120 trusted results and six provider reports plus persisted provider observations.
+- With the browser forced offline, the service worker relaunched the app shell and the same exact `bear` search rendered 120 cached cards with explicit `CACHED / OFFLINE` labeling and preserved capture time/evidence.
+- Restoring connectivity did not silently replace the cached view. The cached state remained visible, `Refresh live` became available, and only after explicit refresh did the UI return to the live 120-result aggregate state.
+- This supersedes the earlier BLOCKED/UNVERIFIED headless-Chrome harness note. The browser path is now VERIFIED by the later Playwright proof.
+
+### Closure
+- Reliability phase source, production Edge deployment, IndexedDB v2→v3 migration, provider evidence persistence, exact-query offline snapshots, offline shell behavior, reconnect behavior, and deliberate live refresh are verified.
+- GitHub Pages deployment for implementation commit `1c40abf` previously completed successfully in workflow run `35383649302`.
+- The only remaining infrastructure limitation is unattended Edge deployment: GitHub Actions still requires valid Cloudflare repository secrets before `.github/workflows/edge.yml` can deploy without the local OAuth path.
