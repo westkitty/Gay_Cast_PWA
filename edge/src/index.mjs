@@ -1,169 +1,213 @@
 import contract from '../../provider-contract.json' with { type: 'json' };
+import {
+  SEARCH_RESPONSE_SCHEMA_VERSION,
+  canonicalResultKey,
+  normalizeProviderReport,
+  normalizeSearchResult
+} from '../../search-contract.mjs';
+import {
+  ADAPTERS,
+  buildProviderUrl,
+  parseBarebackBastardsHtml,
+  parseGayPornArchiveHtml,
+  parseGayPornPlanetHtml,
+  parseMachoTubeHtml,
+  parseSunPornoHtml,
+  parseXVideosHtml
+} from './adapters.mjs';
 
-const PROVIDERS = new Map(contract.providers.map(p => [p.id, p]));
-const JSON_HEADERS = {'content-type':'application/json; charset=utf-8','cache-control':'no-store'};
-const ADAPTERS = new Map([['gaypornarchive',{version:'gaypornarchive-edge-v1',parseText:parseGayPornArchiveHtml}],['gaypornplanet',{version:'gaypornplanet-edge-v1',parseText:parseGayPornPlanetHtml}],['machotube',{version:'machotube-edge-v1',parseText:parseMachoTubeHtml}],['sunporno',{version:'sunporno-edge-v1',parseText:parseSunPornoHtml}]]);
-const KNOWN_EDGE_STATES = new Map([['barebackbastards','VANTAGE_TIMEOUT'],['xvideos','VANTAGE_BLOCKED']]);
+export {buildProviderUrl,parseBarebackBastardsHtml,parseGayPornArchiveHtml,parseGayPornPlanetHtml,parseMachoTubeHtml,parseSunPornoHtml,parseXVideosHtml};
 
-function cors(origin, env={}) {
-  const allowed = env.ALLOWED_ORIGIN || 'https://westkitty.github.io';
-  return origin === allowed ? {'access-control-allow-origin':origin,'vary':'Origin'} : {};
+const PROVIDERS=new Map(contract.providers.map(provider=>[provider.id,provider]));
+const JSON_HEADERS={'content-type':'application/json; charset=utf-8','cache-control':'no-store'};
+const KNOWN_EDGE_STATES=new Map([['barebackbastards','VANTAGE_TIMEOUT'],['xvideos','VANTAGE_BLOCKED']]);
+
+function cors(origin,env={}) {
+  const allowed=env.ALLOWED_ORIGIN||'https://westkitty.github.io';
+  return origin===allowed?{'access-control-allow-origin':origin,'vary':'Origin'}:{};
 }
 function json(body,status=200,origin='',env={}) {
   return new Response(JSON.stringify(body),{status,headers:{...JSON_HEADERS,...cors(origin,env)}});
 }
-export function buildProviderUrl(provider, query, page=1) {
-  if (!provider?.searchTemplate) throw new Error('provider has no search template');
-  const encoded = encodeURIComponent(query.trim()).replace(/%20/g,'+');
-  const n = provider.pagination === 'ZERO_BASED_QUERY_PAGE' ? Math.max(0,page-1) : Math.max(1,page);
-  return provider.searchTemplate.replaceAll('{query}',encoded).replaceAll('{page}',String(n));
-}
 function requestedProviders(url) {
   const raw=url.searchParams.get('providers');
-  if(!raw) return [];
-  return [...new Set(raw.split(',').map(x=>x.trim()).filter(Boolean))];
+  if(!raw)return [];
+  return [...new Set(raw.split(',').map(value=>value.trim()).filter(Boolean))];
 }
-async function fetchBounded(url, timeoutMs=8000) {
+async function fetchBounded(url,timeoutMs=8000) {
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort('timeout'),timeoutMs);
-  try { return await fetch(url,{redirect:'follow',signal:controller.signal,headers:{'user-agent':'GayCast-Edge/0.1 (+https://github.com/westkitty/Gay_Cast_PWA)','accept':'text/html,application/xhtml+xml'}}); }
-  finally { clearTimeout(timer); }
-}
-function decodeEntities(value='') {
-  return value.replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
-}
-function tagAttr(tag,name) {
-  const m=tag.match(new RegExp(`\\b${name}\\s*=\\s*(["'])(.*?)\\1`,'i'));
-  return m ? decodeEntities(m[2]) : '';
-}
-
-export function parseBarebackBastardsHtml(html, provider) {
-  const out=[], seen=new Set();
-  const pattern=/<a\b([^>]*\bclass=["'][^"']*\bthumbnail\b[^"']*["'][^>]*)>/gi;
-  for(const match of html.matchAll(pattern)) {
-    const tag=match[1], href=tagAttr(tag,'href'), title=tagAttr(tag,'title').trim();
-    if(!title || !/^\/\d+\/[a-z0-9][^?#]*\/?$/i.test(href)) continue;
-    const url=new URL(href,'https://barebackbastards.com').href;
-    if(seen.has(url)) continue;
-    seen.add(url); out.push({title,url,providerId:provider.id,source:provider.name});
-    if(out.length>=40) break;
+  try {
+    return await fetch(url,{
+      redirect:'follow',
+      signal:controller.signal,
+      headers:{
+        'user-agent':'GayCast-Edge/0.2 (+https://github.com/westkitty/Gay_Cast_PWA)',
+        accept:'text/html,application/xhtml+xml'
+      }
+    });
+  } finally {
+    clearTimeout(timer);
   }
-  return out;
 }
-function upstreamBlockState(html, provider) {
-  if(provider?.id==='xvideos' && /<h1>Please visit\s*<a[^>]+xvideos\.com/i.test(html)) return 'VANTAGE_BLOCKED';
-  if(html.length<50000 && /cf-chl|challenge-platform|<title>Just a moment|cf-turnstile|access denied/i.test(html)) return 'VANTAGE_BLOCKED';
+function upstreamBlockState(html,provider) {
+  if(provider?.id==='xvideos'&&/<h1>Please visit\s*<a[^>]+xvideos\.com/i.test(html))return 'VANTAGE_BLOCKED';
+  if(html.length<50000&&/cf-chl|challenge-platform|<title>Just a moment|cf-turnstile|access denied/i.test(html))return 'VANTAGE_BLOCKED';
   return null;
 }
-export function parseMachoTubeHtml(html, provider) {
-  const out=[], seen=new Set();
-  for(const match of html.matchAll(/<a\b([^>]*)>/gi)) {
-    const tag=match[1], href=tagAttr(tag,'href'), title=tagAttr(tag,'title').trim(), cls=tagAttr(tag,'class');
-    if(!title || !/(?:^|\s)js-gallery-link(?:\s|$)/.test(cls) || !/^\/movies\/\d+\/[a-z0-9][^?#]*$/i.test(href)) continue;
-    if(href.includes('${') || title.includes('${')) continue;
-    const url=new URL(href,'https://www.machotube.tv').href;
-    if(seen.has(url)) continue;
-    seen.add(url); out.push({title,url,providerId:provider.id,source:provider.name});
-    if(out.length>=40) break;
-  }
-  return out;
+function report(provider,query,state,extra={}) {
+  return normalizeProviderReport({
+    providerId:provider.id,
+    provider:provider.name,
+    state,
+    query,
+    ...extra
+  });
 }
-export function parseGayPornArchiveHtml(html, provider) {
-  const out=[], seen=new Set();
-  for(const match of html.matchAll(/<a\b([^>]*)>/gi)) {
-    const tag=match[1], href=tagAttr(tag,'href'), title=tagAttr(tag,'title').trim(), cls=tagAttr(tag,'class'), gallery=tagAttr(tag,'data-gallery-id');
-    if(!title || !/(?:^|\s)js-gallery-link(?:\s|$)/.test(cls) || !/^\d+$/.test(gallery) || !/^\/\d+\/[a-z0-9][^?#]*\/$/i.test(href)) continue;
-    if(href.includes('${') || title.includes('${')) continue;
-    const url=new URL(href,'https://gaypornarchive.com').href;
-    if(seen.has(url)) continue;
-    seen.add(url); out.push({title,url,providerId:provider.id,source:provider.name});
-    if(out.length>=40) break;
-  }
-  return out;
-}
-export function parseGayPornPlanetHtml(html, provider) {
-  const out=[], seen=new Set();
-  for(const match of html.matchAll(/<a\b([^>]*)>/gi)) {
-    const tag=match[1], href=tagAttr(tag,'href'), title=tagAttr(tag,'title').trim(), cls=tagAttr(tag,'class');
-    if(!title || !/(?:^|\s)un-card-link(?:\s|$)/.test(cls) || !/^\/video\/\d+-[^/?#]+\.html$/i.test(href)) continue;
-    const url=new URL(href,'https://gaypornplanet.com').href;
-    if(seen.has(url)) continue;
-    seen.add(url); out.push({title,url,providerId:provider.id,source:provider.name});
-    if(out.length>=40) break;
-  }
-  return out;
-}
-export function parseSunPornoHtml(html, provider) {
-  const out=[], seen=new Set();
-  for(const match of html.matchAll(/<a\b([^>]*)>/gi)) {
-    const tag=match[1], href=tagAttr(tag,'href'), title=tagAttr(tag,'title').trim(), cls=tagAttr(tag,'class');
-    if(!title || !/(?:^|\s)item(?:\s|$)/.test(cls) || !/^https?:\/\/(?:www\.)?sunporno\.com\/v\/\d+\/[^?#]+\/?$/i.test(href)) continue;
-    const cleanTitle=title.replace(/^Porn Videos/i,'').trim();
-    if(!cleanTitle) continue;
-    const url=new URL(href,'https://www.sunporno.com').href;
-    if(seen.has(url)) continue;
-    seen.add(url); out.push({title:cleanTitle,url,providerId:provider.id,source:provider.name});
-    if(out.length>=40) break;
-  }
-  return out;
-}
-
-export function parseXVideosHtml(html, provider) {
-  const out=[], seen=new Set();
-  const pattern=/<p\b[^>]*class=["'][^"']*\btitle\b[^"']*["'][^>]*>\s*<a\b([^>]*)>/gi;
-  for(const match of html.matchAll(pattern)) {
-    const tag=match[1], href=tagAttr(tag,'href'), title=tagAttr(tag,'title').trim();
-    if(!title || !href || !/\/video(?:[._/]|$)/i.test(href)) continue;
-    const url=new URL(href,'https://www.xvideos.com').href;
-    if(seen.has(url)) continue;
-    seen.add(url); out.push({title,url,providerId:provider.id,source:provider.name});
-    if(out.length>=40) break;
-  }
-  return out;
-}
-async function searchProvider(provider, query, page) {
+async function searchProvider(provider,query,page) {
   const knownState=KNOWN_EDGE_STATES.get(provider.id);
-  if(knownState) return {providerId:provider.id,provider:provider.name,state:knownState,results:[]};
+  if(knownState)return {...report(provider,query,knownState,{reason:'Known Cloudflare-vantage condition; upstream request intentionally skipped.'}),results:[]};
+
   const adapter=ADAPTERS.get(provider.id);
-  if(!adapter) return {providerId:provider.id,provider:provider.name,state:'ADAPTER_UNIMPLEMENTED',results:[]};
-  const requestUrl=buildProviderUrl(provider,query,page);
+  if(!adapter)return {...report(provider,query,'ADAPTER_UNIMPLEMENTED',{reason:'No GayCast Edge adapter is implemented for this provider.'}),results:[]};
+
+  const requestUrl=adapter.buildUrl(provider,query,page);
   const started=Date.now();
+  const common={adapterId:adapter.id,adapterVersion:adapter.version,requestUrl};
+
   try {
     const response=await fetchBounded(requestUrl,8000);
-    if(!response.ok) return {providerId:provider.id,provider:provider.name,state:'HTTP_ERROR',httpStatus:response.status,requestUrl,finalUrl:response.url,elapsedMs:Date.now()-started,results:[]};
-    const type=(response.headers.get('content-type')||'').toLowerCase();
-    if(!type.includes('text/html')) return {providerId:provider.id,provider:provider.name,state:'UNEXPECTED_CONTENT',contentType:type,requestUrl,finalUrl:response.url,elapsedMs:Date.now()-started,results:[]};
+    const statusState=adapter.statusState?.(response);
+    if(statusState)return {...report(provider,query,statusState.state,{...common,httpStatus:response.status,finalUrl:response.url,elapsedMs:Date.now()-started,reason:statusState.reason}),results:[]};
+
+    if(!response.ok)return {...report(provider,query,'HTTP_ERROR',{...common,httpStatus:response.status,finalUrl:response.url,elapsedMs:Date.now()-started,reason:`Upstream returned HTTP ${response.status}.`}),results:[]};
+
+    const contentType=(response.headers.get('content-type')||'').toLowerCase();
+    if(!contentType.includes('text/html'))return {...report(provider,query,'UNEXPECTED_CONTENT',{...common,finalUrl:response.url,elapsedMs:Date.now()-started,reason:`Unexpected upstream content type: ${contentType||'unknown'}.`}),results:[]};
+
     const html=await response.text();
-    if(provider.id==='gaypornplanet'){const path=new URL(response.url).pathname;if(path.startsWith('/search/'))return {providerId:provider.id,provider:provider.name,state:'QUERY_FALLBACK',adapterVersion:adapter.version,requestUrl,finalUrl:response.url,elapsedMs:Date.now()-started,diagnostics:{htmlBytes:html.length},results:[]};}
     const blocked=upstreamBlockState(html,provider);
-    const diagnostics={htmlBytes:html.length,thumbBlockMarkers:(html.match(/thumb-block/gi)||[]).length,titleClassMarkers:(html.match(/class=["'][^"']*\btitle\b/gi)||[]).length,thumbnailMarkers:(html.match(/class=["'][^"']*\bthumbnail\b/gi)||[]).length};
-    if(blocked) return {providerId:provider.id,provider:provider.name,state:blocked,adapterVersion:adapter.version,requestUrl,finalUrl:response.url,elapsedMs:Date.now()-started,diagnostics,results:[]};
-    const results=adapter.parseText(html,provider,query);
-    if(['gaypornarchive','machotube'].includes(provider.id)&&results.length){const tokens=(query.toLowerCase().match(/[a-z0-9]{3,}/g)||[]);const evidenced=tokens.length&&results.some(x=>tokens.some(t=>x.title.toLowerCase().includes(t)));if(!evidenced)return {providerId:provider.id,provider:provider.name,state:'QUERY_FALLBACK',adapterVersion:adapter.version,requestUrl,finalUrl:response.url,elapsedMs:Date.now()-started,diagnostics:{resultCount:results.length,queryEvidence:false},results:[]};}
-    return {providerId:provider.id,provider:provider.name,state:results.length?'OK':'EMPTY',adapterVersion:adapter.version,requestUrl,finalUrl:response.url,elapsedMs:Date.now()-started,diagnostics:results.length?undefined:diagnostics,results};
+    if(blocked)return {...report(provider,query,blocked,{...common,finalUrl:response.url,elapsedMs:Date.now()-started,reason:'Upstream response indicates a Cloudflare-vantage block or challenge.'}),results:[]};
+
+    const parsed=adapter.parse(html,provider,query).map(item=>normalizeSearchResult(item,provider.id)).filter(Boolean);
+    const evidence=adapter.evaluate({response,html,results:parsed,query,provider});
+    if(evidence.state!=='OK'){
+      return {
+        ...report(provider,query,evidence.state,{
+          ...common,
+          finalUrl:response.url,
+          elapsedMs:Date.now()-started,
+          resultCount:0,
+          reason:evidence.reason
+        }),
+        results:[]
+      };
+    }
+
+    return {
+      ...report(provider,query,'OK',{
+        ...common,
+        finalUrl:response.url,
+        elapsedMs:Date.now()-started,
+        resultCount:parsed.length
+      }),
+      results:parsed
+    };
   } catch(error) {
-    return {providerId:provider.id,provider:provider.name,state:(error?.name==='AbortError'||String(error?.message||'').toLowerCase()==='timeout')?'TIMEOUT':'NETWORK_ERROR',requestUrl,elapsedMs:Date.now()-started,diagnostics:{errorName:error?.name||'Error',errorMessage:String(error?.message||'fetch failed').slice(0,180)},results:[]};
+    const timeout=error?.name==='AbortError'||String(error?.message||'').toLowerCase()==='timeout';
+    return {
+      ...report(provider,query,timeout?'VANTAGE_TIMEOUT':'NETWORK_ERROR',{
+        ...common,
+        elapsedMs:Date.now()-started,
+        reason:timeout?'Upstream did not complete within the bounded Edge fetch budget.':String(error?.message||'Upstream fetch failed.').slice(0,180)
+      }),
+      results:[]
+    };
   }
 }
-export async function handleRequest(request, env={}) {
-  const url=new URL(request.url), origin=request.headers.get('origin')||'';
-  if(request.method==='OPTIONS') return new Response(null,{status:204,headers:{...cors(origin,env),'access-control-allow-methods':'GET,OPTIONS','access-control-allow-headers':'content-type'}});
-  if(request.method!=='GET') return json({error:'method_not_allowed'},405,origin,env);
-  if(url.pathname==='/health') return json({ok:true,contractId:contract.contractId,schemaVersion:contract.schemaVersion,decidedProviders:contract.providers.length,edgeAdapters:[...ADAPTERS.keys()],knownEdgeStates:Object.fromEntries(KNOWN_EDGE_STATES)},200,origin,env);
-  if(url.pathname==='/v1/providers') return json({contractId:contract.contractId,providers:contract.providers.filter(p=>p.supportState==='SUPPORTED').map(p=>({...p,edgeAdapter:ADAPTERS.has(p.id),edgeState:ADAPTERS.has(p.id)?'READY':(KNOWN_EDGE_STATES.get(p.id)||'ADAPTER_UNIMPLEMENTED')}))},200,origin,env);
-  if(url.pathname!=='/v1/search') return json({error:'not_found'},404,origin,env);
-  const query=(url.searchParams.get('q')||'').trim();
-  if(!query || query.length>120) return json({error:'invalid_query'},400,origin,env);
-  if(env.SEARCH_RATE_LIMITER){const limited=await env.SEARCH_RATE_LIMITER.limit({key:'v1-search'});if(!limited.success)return json({error:'rate_limited'},429,origin,env)}
-  const ids=requestedProviders(url);
-  if(!ids.length) return json({error:'providers_required','allowed':contract.providers.filter(p=>p.supportState==='SUPPORTED').map(p=>p.id)},400,origin,env);
-  if(ids.length>6) return json({error:'too_many_providers',max:6},400,origin,env);
-  const providers=[];
-  for(const id of ids){const p=PROVIDERS.get(id);if(!p || p.supportState!=='SUPPORTED')return json({error:'provider_not_allowed',providerId:id},400,origin,env);providers.push(p)}
-  const page=Math.max(1,Math.min(20,Number.parseInt(url.searchParams.get('page')||'1',10)||1));
-  const reports=await Promise.all(providers.map(p=>searchProvider(p,query,page)));
-  const results=[],seen=new Set();
-  for(const report of reports)for(const item of report.results||[]){const key=item.url.replace(/^https?:\/\/(?:www\.)?/,'').replace(/\/$/,'');if(!seen.has(key)){seen.add(key);results.push(item)}}
-  return json({query,page,contractId:contract.contractId,reports,results},200,origin,env);
+
+export function dedupeAggregateResults(reportsWithResults=[]) {
+  const results=[];
+  const seen=new Set();
+  for(const providerReport of reportsWithResults){
+    for(const item of providerReport.results||[]){
+      const key=item.dedupeKey||canonicalResultKey(item.url);
+      if(seen.has(key))continue;
+      seen.add(key);
+      results.push(item);
+    }
+  }
+  return results;
 }
-export default {fetch: handleRequest};
+
+export async function handleRequest(request,env={}) {
+  const url=new URL(request.url);
+  const origin=request.headers.get('origin')||'';
+
+  if(request.method==='OPTIONS')return new Response(null,{status:204,headers:{...cors(origin,env),'access-control-allow-methods':'GET,OPTIONS','access-control-allow-headers':'content-type'}});
+  if(request.method!=='GET')return json({error:'method_not_allowed'},405,origin,env);
+
+  if(url.pathname==='/health')return json({
+    ok:true,
+    contractId:contract.contractId,
+    schemaVersion:SEARCH_RESPONSE_SCHEMA_VERSION,
+    providerContractSchemaVersion:contract.schemaVersion,
+    decidedProviders:contract.providers.length,
+    edgeAdapters:[...ADAPTERS.values()].map(adapter=>({id:adapter.id,version:adapter.version})),
+    knownEdgeStates:Object.fromEntries(KNOWN_EDGE_STATES)
+  },200,origin,env);
+
+  if(url.pathname==='/v1/providers')return json({
+    contractId:contract.contractId,
+    schemaVersion:SEARCH_RESPONSE_SCHEMA_VERSION,
+    providers:contract.providers
+      .filter(provider=>provider.supportState==='SUPPORTED')
+      .map(provider=>{
+        const adapter=ADAPTERS.get(provider.id);
+        return {
+          ...provider,
+          edgeAdapter:Boolean(adapter),
+          edgeAdapterId:adapter?.id,
+          edgeAdapterVersion:adapter?.version,
+          edgeState:adapter?'READY':(KNOWN_EDGE_STATES.get(provider.id)||'ADAPTER_UNIMPLEMENTED')
+        };
+      })
+  },200,origin,env);
+
+  if(url.pathname!=='/v1/search')return json({error:'not_found'},404,origin,env);
+
+  const query=(url.searchParams.get('q')||'').trim();
+  if(!query||query.length>120)return json({error:'invalid_query'},400,origin,env);
+
+  if(env.SEARCH_RATE_LIMITER){
+    const limited=await env.SEARCH_RATE_LIMITER.limit({key:'v1-search'});
+    if(!limited.success)return json({error:'rate_limited'},429,origin,env);
+  }
+
+  const ids=requestedProviders(url);
+  if(!ids.length)return json({error:'providers_required',allowed:contract.providers.filter(provider=>provider.supportState==='SUPPORTED').map(provider=>provider.id)},400,origin,env);
+  if(ids.length>6)return json({error:'too_many_providers',max:6},400,origin,env);
+
+  const providers=[];
+  for(const id of ids){
+    const provider=PROVIDERS.get(id);
+    if(!provider||provider.supportState!=='SUPPORTED')return json({error:'provider_not_allowed',providerId:id},400,origin,env);
+    providers.push(provider);
+  }
+
+  const page=Math.max(1,Math.min(20,Number.parseInt(url.searchParams.get('page')||'1',10)||1));
+  const reportsWithResults=await Promise.all(providers.map(provider=>searchProvider(provider,query,page)));
+  const results=dedupeAggregateResults(reportsWithResults);
+  const reports=reportsWithResults.map(({results:ignored,...providerReport})=>providerReport);
+  return json({
+    schemaVersion:SEARCH_RESPONSE_SCHEMA_VERSION,
+    contractId:contract.contractId,
+    query,
+    page,
+    observedAt:new Date().toISOString(),
+    reports,
+    results
+  },200,origin,env);
+}
+
+export default {fetch:handleRequest};

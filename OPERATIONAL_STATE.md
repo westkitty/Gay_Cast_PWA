@@ -60,3 +60,39 @@
 
 - 2026-09-16 SunPorno Edge expansion: committed adapter `0e55adb` and deployed Worker version `e153d656-30e6-4e2e-a949-806e0e214f48` from the authorized local Wrangler OAuth session. Live Cloudflare proof: `bear` -> 12 `OK` results at `/s/bear/`; `muscle` -> 40 `OK` results at `/tags/muscle/`; nonsense `qzxqzxqzx987` -> HTTP 404 and zero trusted results. `/health` now advertises four Edge adapters.
 - 2026-09-16 deployment-CI finding: `.github/workflows/edge.yml` was upgraded to `cloudflare/wrangler-action@v4` so `wrangler.jsonc` is recognized, but GitHub Actions deployment remains BLOCKED because repository Cloudflare API/account secrets are not currently available to the workflow. Local Wrangler OAuth deployment is verified working; do not claim unattended Edge CI deployment until scoped GitHub secrets are configured and a workflow run succeeds. Failed evidence: runs `35157175831` (Wrangler 3/config mismatch) and `35157248088` (Wrangler 4/auth missing).
+
+
+## State revision 2026-09-18.1 — provider reliability + truthful offline search
+
+### Implemented
+- Added shared normalized search contract `search-contract.mjs` used by Edge responses, PWA normalization/rendering, trusted-result filtering, canonical deduplication, and offline snapshot compatibility.
+- Refactored Edge provider behavior into portable allowlisted adapters in `edge/src/adapters.mjs`; adapter-owned seams now cover bounded URL construction, parsing, response-state interpretation where provider-specific, and query-evidence validation.
+- Preserved live adapter set: GayPornArchive, GayPornPlanet, MachoTube, and SunPorno. No provider was added merely to increase count.
+- Preserved known non-live states: XVideos = `VANTAGE_BLOCKED`, BarebackBastards = `VANTAGE_TIMEOUT`. Android `SUPPORTED` remains separate from Edge readiness.
+- Added PWA provider evidence surface showing contract eligibility, Edge adapter availability/readiness, most recent locally observed evidence, most recent result count, most recent trusted search time, Cloudflare-vantage state when known, and direct-provider fallback availability.
+- Added IndexedDB schema v3 with `searchSnapshots` and `providerObservations`. Existing media/collections/creators/savedSearches/inbox/settings stores are not deleted or rewritten by upgrade.
+- Added exact normalized-query + exact provider-set offline snapshots. Snapshots are bounded to 30 compatible queries, 240 trusted results per query, and a 30-day maximum age.
+- Cached snapshots are explicitly labeled `CACHED / OFFLINE` or `CACHED / BROKER UNAVAILABLE`, preserve original evidence timestamps/states, and are never silently replaced when connectivity returns. A deliberate `Refresh live` action becomes available after reconnect.
+- Derived search snapshots/provider observations remain browser-local and are excluded from the normal user-authored JSON backup.
+- Service-worker shell cache advanced to `gaycast-pwa-v6` only to include the new shared/browser modules. Dynamic Edge search responses remain outside the service-worker static cache.
+
+### Verification
+- Legacy Edge/parser suite returned to green after adapter extraction.
+- Expanded Node suite: 30/30 passing, covering provider allowlisting, normalized result/report shape, query-evidence rejection, known vantage states, bounded provider count, arbitrary target URL rejection, aggregate deduplication, timeout evidence, exact query/provider keys, snapshot schema/age rejection, cache bounds, untrusted-result filtering, and non-destructive v3 store creation.
+- Static syntax checks cover `app.js`, `db.js`, `db-schema.mjs`, `search-contract.mjs`, `sw.js`, `edge/src/adapters.mjs`, and `edge/src/index.mjs`.
+- Pages and Edge workflows now validate the new shared and adapter modules before deployment.
+
+### Preserved boundaries
+- `provider-contract.json` remains Android-derived provider-support truth and was not manually edited in this phase.
+- Worker remains query/provider allowlist-only with existing six-provider request bound, CORS boundary, and rate-limit binding.
+- GitHub Pages remains static hosting; the production Edge URL continues to be injected through `runtime-config.json`.
+- No Cloudflare credentials, account secrets, local Wrangler cache, or browser profiles belong in the repository.
+- Local selected media files remain session-only.
+- Direct provider launchers remain the fallback path.
+
+### Deployment boundary
+- Source validation and repository delivery are separate from Cloudflare production deployment.
+- Unattended Edge CI remains blocked until the required GitHub Cloudflare secrets actually exist and a workflow run succeeds.
+- Local Wrangler OAuth deployment remains historically verified, but this reliability source phase does not require or imply a new production Worker deployment.
+
+- Browser smoke note (2026-09-18): headless Chrome was available, but both isolated DevTools and sequential `--dump-dom` harnesses wedged in the temporary Chrome profile before completing the v2→v3/offline user-path assertions. Only the v2 seed step was observed. Treat browser migration/offline smoke as BLOCKED/UNVERIFIED for this source phase; no browser-pass claim is authorized from that attempt.

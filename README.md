@@ -36,3 +36,21 @@ GayPornArchive, GayPornPlanet, MachoTube, and SunPorno are live-verified Edge ad
 The Worker restricts browser CORS to `https://westkitty.github.io`, bounds query/page/provider counts, and uses Cloudflare's native `SEARCH_RATE_LIMITER` binding at 120 search calls per 60 seconds. `GAYCAST_EDGE_BASE_URL` is stored as a GitHub repository variable and injected into `runtime-config.json` by the Pages workflow; the source file keeps an empty endpoint so a clone remains deployable without Cloudflare.
 
 Manual CI deployment is available through `.github/workflows/edge.yml` when a scoped `CLOUDFLARE_API_TOKEN` is configured. Local Wrangler OAuth deployment also works on the authorized development machine.
+
+
+## Provider reliability and offline search snapshots
+
+GayCast now uses one normalized provider-search contract across GayCast Edge, aggregate responses, PWA rendering, local observations, and cached search snapshots. Result records keep only evidence-backed fields such as provider ID, title, source URL, optional proven media/thumbnail metadata, and a canonical deduplication key. Provider reports separately record the provider ID, evidence state, result count, evaluated query, adapter identity/version when applicable, observation time, reason, and whether the returned result set is trusted.
+
+The Edge broker is organized around a portable allowlisted adapter registry. A live adapter owns bounded query-URL construction, parsing, and query-evidence evaluation; adding an adapter does not permit arbitrary domains or browser-supplied target URLs. Android-derived `SUPPORTED` eligibility remains separate from Edge adapter readiness.
+
+IndexedDB schema v3 adds two derived-data stores without replacing or deleting existing user stores:
+
+- `searchSnapshots`: exact normalized-query + exact eligible-provider-set snapshots.
+- `providerObservations`: the browser's most recent locally observed provider evidence.
+
+Search snapshots are capped at 30 compatible queries, at 240 trusted results per snapshot, and expire after 30 days. They are shown only for an exact normalized query/provider-set match. Offline or broker-unavailable snapshots are explicitly labeled cached and retain their original provider evidence and capture time. They are never merged with speculative or live-looking placeholder results.
+
+The provider evidence surface distinguishes contract eligibility, Edge adapter readiness, the last locally observed evidence state/count/time, known Cloudflare-vantage conditions, and direct-search fallback availability. “Last observed” is local evidence, not a global uptime claim.
+
+Derived snapshot/observation stores stay browser-local and are intentionally excluded from the normal GayCast JSON backup. Existing media, collections, creators, saved searches, inbox, and settings remain the portable user-authored backup payload.

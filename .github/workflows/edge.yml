@@ -17,6 +17,8 @@ jobs:
       - name: Validate broker contract
         run: |
           python3 -m json.tool provider-contract.json >/dev/null
+          node --check search-contract.mjs
+          node --check edge/src/adapters.mjs
           node --check edge/src/index.mjs
           node --test edge/test/*.test.mjs
       - name: Deploy Worker
